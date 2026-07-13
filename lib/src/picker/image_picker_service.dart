@@ -31,6 +31,40 @@ class ImagePickerService {
   final ImagePicker _picker = ImagePicker();
   final ImageCropper _cropper = ImageCropper();
 
+  /// Pick one image and optionally run the existing native cropper, but keep
+  /// the selected bytes lossless for callers that still need to run ML.
+  Future<Uint8List?> pickSingleImageBytes({
+    ImageSource source = ImageSource.gallery,
+    MediaCropperOptions? cropper,
+  }) async {
+    final picked = await _picker.pickImage(source: source);
+    if (picked == null) return null;
+
+    File workingFile = File(picked.path);
+    File? originalFileToDelete;
+    File? croppedFileToDelete;
+    try {
+      if (cropper != null) {
+        final cropped = await _runCropper(workingFile, cropper);
+        if (cropped == null) {
+          await _bestEffortDelete(workingFile);
+          return null;
+        }
+        originalFileToDelete = workingFile;
+        workingFile = File(cropped.path);
+        croppedFileToDelete = workingFile;
+      }
+      return workingFile.readAsBytes();
+    } finally {
+      if (originalFileToDelete != null) {
+        await _bestEffortDelete(originalFileToDelete);
+      }
+      if (croppedFileToDelete != null) {
+        await _bestEffortDelete(croppedFileToDelete);
+      }
+    }
+  }
+
   /// Pick a single image from gallery/camera, optionally crop, then
   /// run through the WebP ladder.
   ///
@@ -47,7 +81,8 @@ class ImagePickerService {
     File? toDeleteAfter;
     try {
       if (options.cropper != null) {
-        final cropped = await _runCropper(File(workingFile.path), options.cropper!);
+        final cropped =
+            await _runCropper(File(workingFile.path), options.cropper!);
         if (cropped == null) {
           // user cancelled cropper — treat as cancel of whole pick
           await _bestEffortDelete(File(picked.path));
@@ -121,7 +156,9 @@ class ImagePickerService {
       File source, MediaCropperOptions opts) async {
     final aspectRatio = opts.aspectRatio;
     final initialPreset = opts.initialPreset ??
-        (aspectRatio != null && aspectRatio.ratioX == 4 && aspectRatio.ratioY == 3
+        (aspectRatio != null &&
+                aspectRatio.ratioX == 4 &&
+                aspectRatio.ratioY == 3
             ? CropAspectRatioPreset.ratio4x3
             : CropAspectRatioPreset.original);
     return _cropper.cropImage(
