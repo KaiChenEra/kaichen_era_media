@@ -30,40 +30,85 @@ class ImagePickerService {
 
   final ImagePicker _picker = ImagePicker();
   final ImageCropper _cropper = ImageCropper();
+  bool _operationInFlight = false;
+
+  /// Native pickers and croppers are modal platform views. A second request
+  /// while one is presented is rejected instead of cancelling the first one.
+  bool get isBusy => _operationInFlight;
+
+  Future<T> _runExclusive<T>(T busyResult, Future<T> Function() action) async {
+    if (_operationInFlight) {
+      debugPrint('[ImagePicker] ignored concurrent native picker request');
+      return busyResult;
+    }
+    _operationInFlight = true;
+    try {
+      return await action();
+    } finally {
+      _operationInFlight = false;
+    }
+  }
 
   /// Pick one image and optionally run the existing native cropper, but keep
   /// the selected bytes lossless for callers that still need to run ML.
   Future<Uint8List?> pickSingleImageBytes({
     ImageSource source = ImageSource.gallery,
     MediaCropperOptions? cropper,
-  }) async {
-    final picked = await _picker.pickImage(source: source);
-    if (picked == null) return null;
+  }) =>
+      _runExclusive<Uint8List?>(null, () async {
+        final picked = await _picker.pickImage(source: source);
+        if (picked == null) return null;
 
-    File workingFile = File(picked.path);
-    File? originalFileToDelete;
-    File? croppedFileToDelete;
-    try {
-      if (cropper != null) {
-        final cropped = await _runCropper(workingFile, cropper);
-        if (cropped == null) {
-          await _bestEffortDelete(workingFile);
-          return null;
+        final pickedFile = File(picked.path);
+        File workingFile = pickedFile;
+        try {
+          if (cropper != null) {
+            final cropped = await _runCropper(workingFile, cropper);
+            if (cropped == null) return null;
+            workingFile = File(cropped.path);
+          }
+          return await workingFile.readAsBytes();
+        } finally {
+          await _bestEffortDelete(pickedFile);
+          if (workingFile.path != pickedFile.path) {
+            await _bestEffortDelete(workingFile);
+          }
         }
-        originalFileToDelete = workingFile;
-        workingFile = File(cropped.path);
-        croppedFileToDelete = workingFile;
-      }
-      return workingFile.readAsBytes();
-    } finally {
-      if (originalFileToDelete != null) {
-        await _bestEffortDelete(originalFileToDelete);
-      }
-      if (croppedFileToDelete != null) {
-        await _bestEffortDelete(croppedFileToDelete);
-      }
-    }
-  }
+      });
+
+  /// Crop already-picked bytes with the same native cropper used by the
+  /// picker flow. This keeps source selection and ratio confirmation as two
+  /// separate UI steps without decoding/re-encoding the image in Dart.
+  Future<Uint8List?> cropImageBytes(
+    Uint8List bytes, {
+    required MediaCropperOptions cropper,
+  }) =>
+      _runExclusive<Uint8List?>(null, () async {
+        final tempDir =
+            await Directory.systemTemp.createTemp('kce_media_crop_');
+        final isPng = bytes.length >= 8 &&
+            bytes[0] == 0x89 &&
+            bytes[1] == 0x50 &&
+            bytes[2] == 0x4E &&
+            bytes[3] == 0x47;
+        final source = File('${tempDir.path}/source.${isPng ? 'png' : 'jpg'}');
+        File? croppedFile;
+        try {
+          await source.writeAsBytes(bytes, flush: true);
+          final cropped = await _runCropper(source, cropper);
+          if (cropped == null) return null;
+          croppedFile = File(cropped.path);
+          return await croppedFile.readAsBytes();
+        } finally {
+          if (croppedFile != null &&
+              !croppedFile.path.startsWith(tempDir.path)) {
+            await _bestEffortDelete(croppedFile);
+          }
+          try {
+            if (await tempDir.exists()) await tempDir.delete(recursive: true);
+          } catch (_) {/* best effort */}
+        }
+      });
 
   /// Pick a single image from gallery/camera, optionally crop, then
   /// run through the WebP ladder.
@@ -73,39 +118,38 @@ class ImagePickerService {
   /// is best-effort cleaned up.
   Future<MediaWebpResult?> pickSingleImageToWebp({
     ImagePickToWebpOptions options = const ImagePickToWebpOptions(),
-  }) async {
-    final picked = await _picker.pickImage(source: options.source);
-    if (picked == null) return null;
+  }) =>
+      _runExclusive<MediaWebpResult?>(null, () async {
+        final picked = await _picker.pickImage(source: options.source);
+        if (picked == null) return null;
 
-    XFile workingFile = picked;
-    File? toDeleteAfter;
-    try {
-      if (options.cropper != null) {
-        final cropped =
-            await _runCropper(File(workingFile.path), options.cropper!);
-        if (cropped == null) {
-          // user cancelled cropper — treat as cancel of whole pick
+        XFile workingFile = picked;
+        try {
+          if (options.cropper != null) {
+            final cropped =
+                await _runCropper(File(workingFile.path), options.cropper!);
+            if (cropped == null) {
+              // user cancelled cropper — treat as cancel of whole pick
+              return null;
+            }
+            workingFile = XFile(cropped.path);
+          }
+
+          final bytes = await File(workingFile.path).readAsBytes();
+          final result = await normalizeBytesToWebp(
+            bytes,
+            maxFileBytes: options.maxFileBytes,
+            stages: options.stages,
+            hashStrategy: options.hashStrategy,
+          );
+          return result;
+        } finally {
           await _bestEffortDelete(File(picked.path));
-          return null;
+          if (workingFile.path != picked.path) {
+            await _bestEffortDelete(File(workingFile.path));
+          }
         }
-        toDeleteAfter = File(picked.path); // delete the original picker tmp
-        workingFile = XFile(cropped.path);
-      }
-
-      final bytes = await File(workingFile.path).readAsBytes();
-      final result = await normalizeBytesToWebp(
-        bytes,
-        maxFileBytes: options.maxFileBytes,
-        stages: options.stages,
-        hashStrategy: options.hashStrategy,
-      );
-      return result;
-    } finally {
-      if (toDeleteAfter != null) {
-        await _bestEffortDelete(toDeleteAfter);
-      }
-    }
-  }
+      });
 
   /// Pick multiple images from the gallery and run each through the
   /// WebP ladder. Falls back to [pickSingleImageToWebp] when the
@@ -130,26 +174,30 @@ class ImagePickerService {
       return one == null ? const [] : [one];
     }
 
-    final picked = await _picker.pickMultiImage(limit: remaining);
-    if (picked.isEmpty) return const [];
+    return _runExclusive<List<MediaWebpResult>>(const [], () async {
+      final picked = await _picker.pickMultiImage(limit: remaining);
+      if (picked.isEmpty) return const [];
 
-    final results = <MediaWebpResult>[];
-    for (final image in picked) {
-      try {
-        final bytes = await File(image.path).readAsBytes();
-        final result = await normalizeBytesToWebp(
-          bytes,
-          maxFileBytes: options.maxFileBytes,
-          stages: options.stages,
-          hashStrategy: options.hashStrategy,
-        );
-        results.add(result);
-      } catch (e, st) {
-        debugPrint('[ImagePicker] failed on $image: $e\n$st');
-        // skip this one, continue with the rest
+      final results = <MediaWebpResult>[];
+      for (final image in picked) {
+        try {
+          final bytes = await File(image.path).readAsBytes();
+          final result = await normalizeBytesToWebp(
+            bytes,
+            maxFileBytes: options.maxFileBytes,
+            stages: options.stages,
+            hashStrategy: options.hashStrategy,
+          );
+          results.add(result);
+        } catch (e, st) {
+          debugPrint('[ImagePicker] failed on $image: $e\n$st');
+          // skip this one, continue with the rest
+        } finally {
+          await _bestEffortDelete(File(image.path));
+        }
       }
-    }
-    return results;
+      return results;
+    });
   }
 
   Future<CroppedFile?> _runCropper(

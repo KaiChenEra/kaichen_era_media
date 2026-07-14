@@ -43,6 +43,11 @@ class MediaCropperOptions {
     title: '裁剪封面',
   );
 
+  static const MediaCropperOptions landscape4x3 = MediaCropperOptions(
+    aspectRatio: CropAspectRatio(ratioX: 4, ratioY: 3),
+    initialPreset: CropAspectRatioPreset.ratio4x3,
+  );
+
   static const MediaCropperOptions square = MediaCropperOptions(
     aspectRatio: CropAspectRatio(ratioX: 1, ratioY: 1),
     initialPreset: CropAspectRatioPreset.square,
