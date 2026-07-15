@@ -16,6 +16,8 @@ dependencies:
   flutter_image_compress: ^2.4.0
   image_picker: ^1.2.1
   image_cropper: ^12.2.1
+  # Pure-Dart codec for the Windows/Linux PNG fallback (no flutter_image_compress there).
+  image: ^4.6.0
 
   # Hashing + IO
   crypto: ^3.0.6

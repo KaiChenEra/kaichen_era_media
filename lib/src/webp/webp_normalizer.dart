@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -34,6 +35,14 @@ Future<MediaWebpResult> normalizeBytesToWebp(
   WebpHashStrategy hashStrategy = WebpHashStrategy.output,
 }) async {
   final inputSha = Sha256Pair.from(input);
+
+  // ponytail: flutter_image_compress 没有 Windows/Linux 实现(会抛
+  // UnimplementedError),而纯 Dart 的 image 包只能 decode WebP、不能 encode。
+  // 桌面(Win/Linux)因此回退到无损 PNG —— 体积换可用。guard 精确到 Win/Linux,
+  // **不含 macOS**(那边 flutter_image_compress 正常),移动端/macOS 字节不变。
+  if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
+    return _encodePngFallback(input, inputSha, stages, hashStrategy);
+  }
 
   final tmpDir = await getTemporaryDirectory();
   final stamp = DateTime.now().microsecondsSinceEpoch;
@@ -91,12 +100,44 @@ Future<MediaWebpResult> normalizeBytesToWebp(
 }
 
 MediaWebpResult _build(
-    Uint8List webpBytes, Sha256Pair inputSha, WebpHashStrategy strategy) {
+    Uint8List webpBytes, Sha256Pair inputSha, WebpHashStrategy strategy,
+    {String extension = 'webp'}) {
   final outputSha = Sha256Pair.fromBytes(webpBytes);
   return MediaWebpResult.from(
     bytes: webpBytes,
     input: inputSha,
     output: outputSha,
     strategy: strategy,
+    extension: extension,
   );
+}
+
+/// Desktop (Windows/Linux) fallback: flutter_image_compress is unavailable,
+/// so decode with the pure-Dart `image` package, downscale the longest side
+/// to the first stage's budget, and encode lossless PNG. Alpha is preserved.
+/// PNG has no lossy ladder, so we do a single resize+encode (no byte budget).
+Future<MediaWebpResult> _encodePngFallback(
+  Uint8List input,
+  Sha256Pair inputSha,
+  List<({int maxSide, int quality})> stages,
+  WebpHashStrategy strategy,
+) async {
+  final decoded = img.decodeImage(input);
+  if (decoded == null) {
+    throw StateError('PNG 回退: 源图解码失败');
+  }
+  final maxSide = stages.isNotEmpty ? stages.first.maxSide : 512;
+  final img.Image sized;
+  if (decoded.width >= decoded.height && decoded.width > maxSide) {
+    sized = img.copyResize(decoded,
+        width: maxSide, interpolation: img.Interpolation.linear);
+  } else if (decoded.height > decoded.width && decoded.height > maxSide) {
+    sized = img.copyResize(decoded,
+        height: maxSide, interpolation: img.Interpolation.linear);
+  } else {
+    sized = decoded;
+  }
+  final png = Uint8List.fromList(img.encodePng(sized));
+  debugPrint('[MediaNormalize] 桌面 PNG 回退: ${png.length} bytes');
+  return _build(png, inputSha, strategy, extension: 'png');
 }
