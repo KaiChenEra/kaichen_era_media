@@ -42,6 +42,33 @@ class MediaCropperOptions {
     initialPreset: CropAspectRatioPreset.ratio4x3,
     title: '裁剪封面',
   );
+
+  static const MediaCropperOptions landscape4x3 = MediaCropperOptions(
+    aspectRatio: CropAspectRatio(ratioX: 4, ratioY: 3),
+    initialPreset: CropAspectRatioPreset.ratio4x3,
+  );
+
+  static const MediaCropperOptions square = MediaCropperOptions(
+    aspectRatio: CropAspectRatio(ratioX: 1, ratioY: 1),
+    initialPreset: CropAspectRatioPreset.square,
+  );
+
+  static const MediaCropperOptions portrait4x5 = MediaCropperOptions(
+    aspectRatio: CropAspectRatio(ratioX: 4, ratioY: 5),
+  );
+
+  static const MediaCropperOptions portrait3x4 = MediaCropperOptions(
+    aspectRatio: CropAspectRatio(ratioX: 3, ratioY: 4),
+  );
+
+  static const MediaCropperOptions portrait9x16 = MediaCropperOptions(
+    aspectRatio: CropAspectRatio(ratioX: 9, ratioY: 16),
+  );
+
+  static const MediaCropperOptions landscape16x9 = MediaCropperOptions(
+    aspectRatio: CropAspectRatio(ratioX: 16, ratioY: 9),
+    initialPreset: CropAspectRatioPreset.ratio16x9,
+  );
 }
 
 /// Options for the full pick → (crop) → WebP normalize pipeline.

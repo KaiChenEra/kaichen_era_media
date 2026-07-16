@@ -30,12 +30,20 @@ class MediaWebpResult {
   /// `.base64` for R2 presign / `x-amz-checksum-sha256` headers.
   final Sha256Pair fileKey;
 
+  /// The on-disk format of [bytes]: `'webp'` normally, or `'png'` on the
+  /// desktop fallback path (flutter_image_compress has no Windows/Linux
+  /// implementation, so those platforms encode lossless PNG instead).
+  /// Callers should use this to set the media `extension` rather than
+  /// hardcoding `'webp'`, so the file name / R2 key match the real bytes.
+  final String extension;
+
   const MediaWebpResult({
     required this.bytes,
     required this.input,
     required this.output,
     required this.strategy,
     required this.fileKey,
+    this.extension = 'webp',
   });
 
   /// Build a result with [fileKey] resolved from [strategy].
@@ -44,6 +52,7 @@ class MediaWebpResult {
     required Sha256Pair input,
     required Sha256Pair output,
     required WebpHashStrategy strategy,
+    String extension = 'webp',
   }) {
     return MediaWebpResult(
       bytes: bytes,
@@ -51,6 +60,7 @@ class MediaWebpResult {
       output: output,
       strategy: strategy,
       fileKey: strategy == WebpHashStrategy.input ? input : output,
+      extension: extension,
     );
   }
 
