@@ -109,7 +109,7 @@ Callers cannot accidentally mix them: there is no "compute sha and then encode" 
 | Drift `StickerContentMedia.sha256` / `AppContentInstance.sha256` | hex (lowercase, 64 chars) | Historical schema, matches `crypto.sha256.convert(b).toString()` directly |
 | R2 presigned-URL request body (`sha256_base64`) | base64 (raw 32-byte digest) | AWS S3 presign API + `x-amz-checksum-sha256` HTTP header convention |
 | iMessage extension cache key | hex | Same store as Drift |
-| Server-side echo (`/api/media/missing-batch/`) | hex (in `file_keys` field) | Server treats keys as opaque strings, but they originated as hex |
+| Server-side echo (`/api/v1/kinjin/sticker-media/missing-batch`) | hex (in `file_keys` field) | Server treats keys as opaque strings, but they originated as hex |
 
 Forcing every call site to compute hex from base64 (or vice versa) was where lingo's pre-extraction code had subtle bugs. The single-pass `Sha256Pair.from(bytes)` factory does both formats from the same digest in one allocation.
 
