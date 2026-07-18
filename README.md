@@ -1,6 +1,6 @@
 # kaichen_era_media
 
-Shared media utilities for KaiChenEra apps — image picker + cropper, canonical 40 KB WebP normalization with 6-stage compression ladder, dual-format (hex + base64) sha256 hashing, and a concurrency-safe URL→file cache.
+Shared media utilities for KaiChenEra apps — image picker + cropper, canonical 40 KB WebP normalization with 6-stage compression ladder, and dual-format (hex + base64) sha256 hashing.
 
 Designed to be **host-agnostic**: lingo_cosmos and kinjin_sticker both depend on this package via their respective sticker integrations; new hosts can drop it in directly.
 
@@ -28,8 +28,6 @@ await File('media/${result.fileKey.hex}.webp').writeAsBytes(result.bytes);
 - `normalizeBytesToWebp(bytes, ...)` → `MediaWebpResult`
 - `ImagePickerService.pickSingleImageToWebp` / `pickMultiImagesToWebp`
 - `Sha256Pair` (hex + base64 in one digest pass) + `computeSha256Hex` / `computeSha256Base64` shorthands
-- `MediaCacheService` (URL → local file, dedup in-flight downloads)
-- `ImageWithCache` (Flutter `ImageProvider` for `AppContentMediaInterface` entities)
 - Constants: `kStickerWebpStages` (the 6-tier ladder) / `kStickerMaxWebpFileBytes` (40 KB)
 
 ## Documentation

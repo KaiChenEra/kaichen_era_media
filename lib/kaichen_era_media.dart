@@ -13,10 +13,6 @@
 ///   / sticker concerns.
 /// - **Hashing**: `Sha256Pair` (hex + base64 from one digest pass),
 ///   plus `computeSha256Hex` / `computeSha256Base64` shorthands.
-/// - **Caching**: `MediaCacheService` (concurrent-safe URL → local
-///   file cache) and `ImageWithCache` (Flutter `ImageProvider` that
-///   prefers the local file but falls back to network with a
-///   background fetch).
 ///
 /// What does **not** live here:
 ///   - sticker-specific orchestration (writing media rows, picking
@@ -34,6 +30,3 @@ export 'src/hash/sha256_helper.dart';
 
 export 'src/picker/image_picker_options.dart';
 export 'src/picker/image_picker_service.dart' show ImagePickerService;
-
-export 'src/cache/media_cache_service.dart' show MediaCacheService;
-export 'src/cache/image_with_cache.dart' show ImageWithCache;

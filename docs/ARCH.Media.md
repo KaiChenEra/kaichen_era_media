@@ -13,8 +13,6 @@
 | `lib/src/hash/sha256_helper.dart` | `Sha256Pair` (single-pass hex+base64) + `computeSha256Hex` / `computeSha256Base64` shorthands |
 | `lib/src/picker/image_picker_service.dart` | `ImagePickerService` singleton — `pickSingleImageToWebp` / `pickMultiImagesToWebp` |
 | `lib/src/picker/image_picker_options.dart` | `ImagePickToWebpOptions` + `MediaCropperOptions` |
-| `lib/src/cache/media_cache_service.dart` | `MediaCacheService` — URL → file cache, concurrent-safe |
-| `lib/src/cache/image_with_cache.dart` | `ImageWithCache` — Flutter `ImageProvider` for `AppContentMediaInterface` |
 
 ## 2. WebP ladder
 
@@ -132,42 +130,24 @@ ImagePickerService.pickSingleImageToWebp(options):
 
 **Why no DB / repo wiring** — by design. The legacy `StickerMediaPickerService` was sticker-coupled (took `StickerContentMediaRepo`, returned `StickerContentMediaImpl`, had `sectionId` parameters). Moving the picker into a generic media package required severing those ties. Sticker-domain orchestration (constructing the row, dedup, file write) is now in `kaichen_era_sticker_sdk`'s `sticker_add_flow.dart`.
 
-## 5. Cache flow
+## 5. Design decisions (in-line because no ADRs)
 
-```
-MediaCacheService.setCachedFile(remotePath, localPath, uuid):
-    cacheKey = "$uuid-md5(remotePath)"
-    if _ongoingCacheTasks[cacheKey] exists:
-        return that task's future  ← coalesce concurrent callers
-    if existing file at localPath, size > 0:
-        return it
-    completer = Completer<File>()
-    _ongoingCacheTasks[cacheKey] = completer
-    download to side path → rename to localPath → complete
-```
+### 5.1 Singleton instances
 
-The keying by `uuid + md5(url)` rather than `url` alone lets two distinct media rows that *happen* to point at the same URL stay separate (e.g. two users uploaded identical sticker bytes; their App-Group paths differ).
+`ImagePickerService` is a singleton. `image_picker` + `image_cropper` carry native resources (camera permission caches, plugin channel subscriptions) that prefer being long-lived; one process-wide instance avoids re-initialization overhead and ensures only one camera session can be active at a time.
 
-`ImageWithCache.getProvider(media)` is the synchronous fast path: `FileImage` if local exists, else `NetworkImage` + fire-and-forget `setCachedFile` so subsequent renders hit the disk path.
-
-## 6. Design decisions (in-line because no ADRs)
-
-### 6.1 Singleton instances
-
-Both `ImagePickerService` and `MediaCacheService` are singletons. `image_picker` + `image_cropper` carry native resources (camera permission caches, plugin channel subscriptions) that prefer being long-lived; one process-wide instance avoids re-initialization overhead and ensures only one camera session can be active at a time.
-
-### 6.2 Image package not a transitive concern
+### 5.2 Image package not a transitive concern
 
 The package depends on `flutter_image_compress` (native re-encoder) but not the `image` Dart package. We don't decode pixels in Dart — every transform is a single round trip through the platform encoder. This:
 - Keeps the package lean (no Dart-side image library transitive deps).
 - Avoids matching color profile / orientation / metadata between Dart-side decode and native-side encode.
 - Loses the ability to do pixel-level effects (which we don't want here — sticker border / mask post-processing live in `kaichen_era_sticker_sdk` / `kaichen_era_sticker_ai`).
 
-### 6.3 No platform-conditional asset support
+### 5.3 No platform-conditional asset support
 
 The package itself is pure Dart-on-Flutter; no Android-only or iOS-only code. ONNX / VisionKit / native bridges are someone else's problem (sticker_ai). This means consumer hosts pay for nothing they don't use — the package is < 200 KB after tree-shaking.
 
-## 7. Performance notes
+## 6. Performance notes
 
 | Operation | Target | Typical |
 |---|---|---|
@@ -175,11 +155,10 @@ The package itself is pure Dart-on-Flutter; no Android-only or iOS-only code. ON
 | `normalizeBytesToWebp` worst case (all 6 stages) | < 2.5 s | 1.2–1.8 s iPhone 16 Pro |
 | `pickSingleImageToWebp` (no cropper) | gallery + decode + ladder | ~600 ms after user taps a photo |
 | `pickSingleImageToWebp` (with cropper) | + cropper UX | ~3 s including user crop time |
-| `MediaCacheService.setCachedFile` 200 KB WebP | network-bound | 50–300 ms on Wi-Fi |
 
 All `normalizeBytesToWebp` callers should run via `compute(...)` to keep the UI isolate responsive on phone-photo-sized inputs.
 
-## 8. Change history
+## 7. Change history
 
 | Date | Change |
 |---|---|
