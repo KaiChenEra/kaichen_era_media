@@ -9,7 +9,6 @@ A small, host-agnostic Flutter package that owns:
 1. **WebP normalization** — turn arbitrary input bytes (PNG / JPEG / HEIC / WebP) into ≤ 40 KB lossy WebP using a deterministic 6-stage ladder.
 2. **Image picking** — `image_picker` + optional `image_cropper` wrapping the same WebP ladder.
 3. **sha256 hashing** — single-pass dual-format (hex + base64) digest matching every store the consumers care about (Drift `media.sha256` columns use hex; R2 / S3 presign upload bodies use base64).
-4. **URL → file caching** — Flutter `ImageProvider` for `AppContentMediaInterface` entities that prefers the local file but falls back to network with a background fetch.
 
 Intentionally **not** in scope: any sticker / chat / domain semantics. Consumers (sticker_sdk, lingo, kinjin) layer those on top.
 
@@ -111,31 +110,6 @@ class ImagePickToWebpOptions {
 
 **`MediaCropperOptions.cover4x3`** — preset matching sticker section cover layout (4:3 ratio, locked). Other ratios → construct via the constructor.
 
-### 2.6 `MediaCacheService`
-
-```dart
-final cache = MediaCacheService();  // singleton
-final file = await cache.setCachedFile(
-  remotePath: 'https://r2.example.com/sticker/<sha>.webp',
-  localPath: '/path/to/local/<sha>.webp',
-  uuid: media.id,
-);
-```
-
-- **Concurrent-safe**: multiple call sites passing the same `(uuid, remotePath)` await one in-flight download; no duplicate work.
-- **Atomic-ish writes**: download to a side path, then rename to `localPath`.
-- **Empty-file repair**: if the local file exists but is 0 bytes (common after a previous download failure), it's deleted before refetching.
-
-### 2.7 `ImageWithCache`
-
-```dart
-final provider = ImageWithCache().getProvider(media); // media is AppContentMediaInterface
-return Image(image: provider, fit: BoxFit.cover);
-```
-
-- Returns `FileImage(localFile)` when the App-Group / pack file exists.
-- Returns `NetworkImage(remotePath)` otherwise, **and** kicks off a background `MediaCacheService.setCachedFile` so subsequent renders hit the disk path.
-
 ## 3. Cancellation & error semantics
 
 | Path | Empty-result indicator | Throws |
@@ -155,7 +129,7 @@ return Image(image: provider, fit: BoxFit.cover);
 ## 5. Related docs
 
 - [ARCH.Media](ARCH.Media.md) — implementation, WebP ladder rationale, sha256 timing
-- [`kaichen_era_sticker_sdk`](https://github.com/KaiChenEra/kaichen_era_sticker_sdk) — primary consumer (sticker_add_flow + ImageWithCache call sites)
+- [`kaichen_era_sticker_sdk`](https://github.com/KaiChenEra/kaichen_era_sticker_sdk) — primary consumer (sticker picker and WebP normalization)
 - [`lingo_cosmos_app/docs/arch/ARCH.Sticker.SubjectLift.md`](https://github.com/KaiChenEra/lingo_cosmos_app/blob/dev/docs/arch/ARCH.Sticker.SubjectLift.md) — non-sticker_sdk consumer (lingo's display page calls `normalizeBytesToWebp` directly during save)
 
 ## 6. Change history

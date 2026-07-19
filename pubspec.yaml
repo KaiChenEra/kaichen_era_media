@@ -1,5 +1,5 @@
 name: kaichen_era_media
-description: Shared image + WebP utilities for KaiChenEra apps — picker, normalizer (40KB ladder), sha256 helpers, file/url cache.
+description: Shared image + WebP utilities for KaiChenEra apps — picker, normalizer (40KB ladder), sha256 helpers.
 version: 0.1.0
 publish_to: none
 
@@ -10,8 +10,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  kaichen_era_app_core: ^0.1.0
-
   # WebP / image
   flutter_image_compress: ^2.4.0
   image_picker: ^1.2.1
@@ -23,7 +21,6 @@ dependencies:
   crypto: ^3.0.6
   path: ^1.9.1
   path_provider: ^2.1.5
-  http: ^1.2.2
 
 dev_dependencies:
   flutter_test:
