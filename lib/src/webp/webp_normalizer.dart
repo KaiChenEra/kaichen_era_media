@@ -48,7 +48,7 @@ Uint8List _encodeWebp(
                 height: targetSide,
                 interpolation: img.Interpolation.cubic,
               );
-    final encoded = img.WebPEncoder().encode(sized, singleFrame: true);
+    final encoded = img.encodeWebP(sized);
     if (encoded.length <= args.maxBytes) return encoded;
     if (targetSide == 1) {
       throw StateError('WebP cannot fit the requested byte limit');
