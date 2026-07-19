@@ -16,7 +16,7 @@ Per skill §3 simplified plugin taxonomy:
 README.md                ← entry point + usage snippet
 docs/CONVENTIONS.md      ← this file
 docs/PRD.Media.md        ← API contract: surface / inputs / outputs / strategies
-docs/ARCH.Media.md       ← internal pipeline: WebP ladder, sha256 timing, picker integration
+docs/ARCH.Media.md       ← internal pipeline: WebP normalization, sha256 timing, picker integration
 ```
 
 ADR / PM / OPS / TEST / GLOSSARY are **not** carved out. The plugin is narrow enough that decision rationale lives in ARCH (in-line "design notes"), and integration test strategies belong to consumers (lingo / kinjin).

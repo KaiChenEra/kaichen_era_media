@@ -1,70 +1,22 @@
 import 'dart:typed_data';
 
 import '../hash/sha256_helper.dart';
-import 'webp_hash_strategy.dart';
 
-/// Full result of running raw bytes through the canonical WebP
-/// normalization ladder.
-///
-/// All four sha256 fields ([input], [output], plus [fileKey] which
-/// echoes one of them) are computed off the same byte buffers in one
-/// pass — there's no risk of hex/base64 drifting from the bytes they
-/// describe.
+/// Canonical WebP bytes and their content hash.
 class MediaWebpResult {
-  /// The WebP-encoded output bytes (≤ `maxFileBytes` if any stage
-  /// hit budget; otherwise the most aggressive stage's output).
+  /// The WebP-encoded output bytes.
   final Uint8List bytes;
 
-  /// sha256 of the **input** bytes the caller passed in.
-  final Sha256Pair input;
+  /// sha256 of [bytes]. Use `.hex` for the media id/file name and `.base64`
+  /// for the R2 checksum header.
+  final Sha256Pair sha256;
 
-  /// sha256 of the **output** WebP bytes (i.e. the bytes that will be
-  /// written to disk).
-  final Sha256Pair output;
+  const MediaWebpResult({required this.bytes, required this.sha256});
 
-  /// Which strategy was requested.
-  final WebpHashStrategy strategy;
-
-  /// Echoes either [input] or [output] depending on [strategy]. Use
-  /// `.hex` to populate Drift `media.sha256`-style columns and
-  /// `.base64` for R2 presign / `x-amz-checksum-sha256` headers.
-  final Sha256Pair fileKey;
-
-  /// The on-disk format of [bytes]: `'webp'` normally, or `'png'` on the
-  /// desktop fallback path (flutter_image_compress has no Windows/Linux
-  /// implementation, so those platforms encode lossless PNG instead).
-  /// Callers should use this to set the media `extension` rather than
-  /// hardcoding `'webp'`, so the file name / R2 key match the real bytes.
-  final String extension;
-
-  const MediaWebpResult({
-    required this.bytes,
-    required this.input,
-    required this.output,
-    required this.strategy,
-    required this.fileKey,
-    this.extension = 'webp',
-  });
-
-  /// Build a result with [fileKey] resolved from [strategy].
-  factory MediaWebpResult.from({
-    required Uint8List bytes,
-    required Sha256Pair input,
-    required Sha256Pair output,
-    required WebpHashStrategy strategy,
-    String extension = 'webp',
-  }) {
-    return MediaWebpResult(
-      bytes: bytes,
-      input: input,
-      output: output,
-      strategy: strategy,
-      fileKey: strategy == WebpHashStrategy.input ? input : output,
-      extension: extension,
-    );
-  }
+  factory MediaWebpResult.fromBytes(Uint8List bytes) =>
+      MediaWebpResult(bytes: bytes, sha256: Sha256Pair.fromBytes(bytes));
 
   @override
-  String toString() => 'MediaWebpResult(${bytes.length} bytes, '
-      'strategy=$strategy, fileKey=${fileKey.hex.substring(0, 8)}...)';
+  String toString() =>
+      'MediaWebpResult(${bytes.length} bytes, ${sha256.hex.substring(0, 8)}...)';
 }

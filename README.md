@@ -1,40 +1,37 @@
 # kaichen_era_media
 
-Shared media utilities for KaiChenEra apps — image picker + cropper, canonical 40 KB WebP normalization with 6-stage compression ladder, and dual-format (hex + base64) sha256 hashing.
-
-Designed to be **host-agnostic**: lingo_cosmos and kinjin_sticker both depend on this package via their respective sticker integrations; new hosts can drop it in directly.
+Shared, host-agnostic image picking, cropping, canonical WebP normalization,
+and SHA-256 utilities for KaiChenEra apps.
 
 ## Usage
 
 ```dart
 import 'package:kaichen_era_media/kaichen_era_media.dart';
 
-// Pick + crop a section cover (4:3) and run through the WebP ladder.
 final result = await ImagePickerService().pickSingleImageToWebp(
-  options: ImagePickToWebpOptions(
+  options: const ImagePickToWebpOptions(
     cropper: MediaCropperOptions.cover4x3,
-    hashStrategy: WebpHashStrategy.output, // sha256 reflects on-disk bytes
   ),
 );
-if (result == null) return; // user cancelled
+if (result == null) return;
 
-await File('media/${result.fileKey.hex}.webp').writeAsBytes(result.bytes);
-// result.fileKey.hex   → matches Drift `media.sha256` columns
-// result.fileKey.base64 → matches R2 `sha256_base64` upload header
+await File('media/${result.sha256.hex}.webp').writeAsBytes(result.bytes);
+// result.sha256.hex matches the bytes written above.
+// result.sha256.base64 is the matching R2 checksum.
 ```
 
-## Public API surface
+## Public API
 
-- `normalizeBytesToWebp(bytes, ...)` → `MediaWebpResult`
-- `ImagePickerService.pickSingleImageToWebp` / `pickMultiImagesToWebp`
-- `Sha256Pair` (hex + base64 in one digest pass) + `computeSha256Hex` / `computeSha256Base64` shorthands
-- Constants: `kStickerWebpStages` (the 6-tier ladder) / `kStickerMaxWebpFileBytes` (40 KB)
+- `normalizeBytesToWebp(bytes, ...)` returns `MediaWebpResult`.
+- `ImagePickerService` supplies single- and multi-image WebP flows.
+- `Sha256Pair` exposes one digest as hex and base64.
+- `kStickerWebpMaxSide` and `kStickerWebpMaxBytes` define the canonical 512px / 500,000-byte bounds.
 
 ## Documentation
 
-- [docs/PRD.Media.md](docs/PRD.Media.md) — API contract (input / output / strategy semantics)
-- [docs/ARCH.Media.md](docs/ARCH.Media.md) — internal pipeline (WebP ladder algorithm, sha256 timing rationale, picker→ladder data flow)
-- [docs/CONVENTIONS.md](docs/CONVENTIONS.md) — doc taxonomy + PR workflow
+- [docs/PRD.Media.md](docs/PRD.Media.md)
+- [docs/ARCH.Media.md](docs/ARCH.Media.md)
+- [docs/CONVENTIONS.md](docs/CONVENTIONS.md)
 
 ## License
 
