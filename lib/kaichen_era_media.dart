@@ -2,29 +2,24 @@
 ///
 /// What lives here:
 ///
-/// - **WebP normalisation**: a single canonical lossy-WebP
-///   compression ladder (`kStickerWebpStages` = 512→256 px, Q90→Q30)
-///   plus `normalizeBytesToWebp(bytes)` which runs the ladder and
-///   returns the WebP bytes alongside both source and output sha256
-///   in hex+base64 (`MediaWebpResult`).
+/// - **WebP normalisation**: lossless WebP bounded to 512px and 500,000 bytes,
+///   `normalizeBytesToWebp(bytes)`, returning final WebP bytes and the sha256
+///   of those exact bytes.
 /// - **Image picker**: `ImagePickerService.pickSingleImageToWebp` /
 ///   `pickMultiImagesToWebp` — `image_picker` + `image_cropper` +
-///   the WebP ladder, returning `MediaWebpResult` with no DB / repo
-///   / sticker concerns.
+///   WebP normalization, returning `MediaWebpResult` with no database or sticker
+///   persistence concerns.
 /// - **Hashing**: `Sha256Pair` (hex + base64 from one digest pass),
 ///   plus `computeSha256Hex` / `computeSha256Base64` shorthands.
 ///
 /// What does **not** live here:
-///   - sticker-specific orchestration (writing media rows, picking
-///     section ids, applying the white border) — that's
-///     `kaichen_era_sticker_sdk`'s job.
+///   - sticker-specific orchestration such as rows, sections, or borders.
 ///   - AI subject lift — `kaichen_era_sticker_ai`.
 library;
 
-export 'src/webp/webp_hash_strategy.dart';
-export 'src/webp/webp_normalizer.dart' show normalizeBytesToWebp;
+export 'src/webp/webp_normalizer.dart'
+    show kStickerWebpMaxBytes, kStickerWebpMaxSide, normalizeBytesToWebp;
 export 'src/webp/webp_result.dart';
-export 'src/webp/webp_stages.dart';
 
 export 'src/hash/sha256_helper.dart';
 

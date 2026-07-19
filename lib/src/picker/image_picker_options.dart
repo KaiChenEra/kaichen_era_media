@@ -2,8 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../webp/webp_hash_strategy.dart';
-import '../webp/webp_stages.dart';
+import '../webp/webp_normalizer.dart';
 
 /// Options for cropping a picked image before WebP normalization.
 class MediaCropperOptions {
@@ -71,29 +70,21 @@ class MediaCropperOptions {
   );
 }
 
-/// Options for the full pick → (crop) → WebP normalize pipeline.
+/// Options for the full pick, optional crop, and WebP normalization pipeline.
 class ImagePickToWebpOptions {
   /// Where to source the image: `gallery` or `camera`.
   final ImageSource source;
 
   /// Cropper options. Null = no cropper (caller gets raw picked image
-  /// straight into the WebP ladder).
+  /// straight into WebP normalization).
   final MediaCropperOptions? cropper;
 
-  /// WebP budget; defaults to the canonical 40KB sticker budget.
-  final int maxFileBytes;
-
-  /// WebP compression ladder. Override only for non-sticker contexts.
-  final List<({int maxSide, int quality})> stages;
-
-  /// Which sha256 to expose as the [MediaWebpResult.fileKey].
-  final WebpHashStrategy hashStrategy;
+  /// Maximum output edge. Aspect ratio is preserved.
+  final int maxSide;
 
   const ImagePickToWebpOptions({
     this.source = ImageSource.gallery,
     this.cropper,
-    this.maxFileBytes = kStickerMaxWebpFileBytes,
-    this.stages = kStickerWebpStages,
-    this.hashStrategy = WebpHashStrategy.output,
+    this.maxSide = kStickerWebpMaxSide,
   });
 }

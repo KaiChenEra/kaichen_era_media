@@ -9,15 +9,8 @@ import '../webp/webp_normalizer.dart';
 import '../webp/webp_result.dart';
 import 'image_picker_options.dart';
 
-/// Generic image-picker → optional cropper → canonical WebP-ladder
-/// pipeline. Returns the WebP bytes plus both source/output sha256 in
-/// a [MediaWebpResult] — call sites decide what to do with the bytes
-/// (write to App Group, push to a repo, mint a media row, etc).
-///
-/// Replaces the legacy sticker-coupled `StickerMediaPickerService`,
-/// which mixed in Drift / repo / sectionId concerns. This service is
-/// **pure**: no DB, no path, no host knowledge. Sticker-specific
-/// orchestration moves into the SDK's `sticker_add_flow`.
+/// Host-agnostic image picker, optional cropper, and WebP normalizer.
+/// Callers decide where the returned bytes are persisted.
 ///
 /// Singleton because [ImagePicker] / [ImageCropper] hold native
 /// resources that prefer being long-lived.
@@ -76,42 +69,8 @@ class ImagePickerService {
         }
       });
 
-  /// Crop already-picked bytes with the same native cropper used by the
-  /// picker flow. This keeps source selection and ratio confirmation as two
-  /// separate UI steps without decoding/re-encoding the image in Dart.
-  Future<Uint8List?> cropImageBytes(
-    Uint8List bytes, {
-    required MediaCropperOptions cropper,
-  }) =>
-      _runExclusive<Uint8List?>(null, () async {
-        final tempDir =
-            await Directory.systemTemp.createTemp('kce_media_crop_');
-        final isPng = bytes.length >= 8 &&
-            bytes[0] == 0x89 &&
-            bytes[1] == 0x50 &&
-            bytes[2] == 0x4E &&
-            bytes[3] == 0x47;
-        final source = File('${tempDir.path}/source.${isPng ? 'png' : 'jpg'}');
-        File? croppedFile;
-        try {
-          await source.writeAsBytes(bytes, flush: true);
-          final cropped = await _runCropper(source, cropper);
-          if (cropped == null) return null;
-          croppedFile = File(cropped.path);
-          return await croppedFile.readAsBytes();
-        } finally {
-          if (croppedFile != null &&
-              !croppedFile.path.startsWith(tempDir.path)) {
-            await _bestEffortDelete(croppedFile);
-          }
-          try {
-            if (await tempDir.exists()) await tempDir.delete(recursive: true);
-          } catch (_) {/* best effort */}
-        }
-      });
-
   /// Pick a single image from gallery/camera, optionally crop, then
-  /// run through the WebP ladder.
+  /// normalize to WebP.
   ///
   /// Returns null when the user cancels the picker; throws on any
   /// other failure. The intermediate file (after crop, before WebP)
@@ -138,9 +97,7 @@ class ImagePickerService {
           final bytes = await File(workingFile.path).readAsBytes();
           final result = await normalizeBytesToWebp(
             bytes,
-            maxFileBytes: options.maxFileBytes,
-            stages: options.stages,
-            hashStrategy: options.hashStrategy,
+            maxSide: options.maxSide,
           );
           return result;
         } finally {
@@ -152,7 +109,7 @@ class ImagePickerService {
       });
 
   /// Pick multiple images from the gallery and run each through the
-  /// WebP ladder. Falls back to [pickSingleImageToWebp] when the
+  /// WebP normalization. Falls back to [pickSingleImageToWebp] when the
   /// remaining slot count is exactly 1 so users get the
   /// camera-fallback hint.
   ///
@@ -184,9 +141,7 @@ class ImagePickerService {
           final bytes = await File(image.path).readAsBytes();
           final result = await normalizeBytesToWebp(
             bytes,
-            maxFileBytes: options.maxFileBytes,
-            stages: options.stages,
-            hashStrategy: options.hashStrategy,
+            maxSide: options.maxSide,
           );
           results.add(result);
         } catch (e, st) {
@@ -211,7 +166,7 @@ class ImagePickerService {
             : CropAspectRatioPreset.original);
     return _cropper.cropImage(
       sourcePath: source.path,
-      compressFormat: ImageCompressFormat.jpg,
+      compressFormat: ImageCompressFormat.png,
       aspectRatio: aspectRatio,
       uiSettings: [
         AndroidUiSettings(
